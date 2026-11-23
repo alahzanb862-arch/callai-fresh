@@ -1,3 +1,48 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Extract project zip
+        run: |
+          mkdir -p extracted_proj
+          unzip -q callai-nov-23-2026-9-50-49-pm.zip -d extracted_proj
+
+      - name: Generate debug keystore if missing
+        run: |
+          KEYSTORE_PATH="$HOME/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Build Debug APK
         run: |
           GRADLE_FILE=$(find extracted_proj -maxdepth 3 \( -name "build.gradle" -o -name "build.gradle.kts" \) | head -n 1)
@@ -6,11 +51,19 @@
             exit 1
           fi
           PROJECT_DIR=$(dirname "$GRADLE_FILE")
-          echo "Building project in: $PROJECT_DIR"
           cd "$PROJECT_DIR"
           if [ ! -f "./gradlew" ]; then
             gradle wrapper --gradle-version 8.7 || true
           fi
-          chmod +x gradlew
-          ./gradlew assembleDebug --console=plain | grep -E "e: |FAILURE:|Execution failed|Could not|Unresolved|error:|exception" -A 3 -B 1 || ./gradlew assembleDebug --console=plain
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --console=plain || true
+          fi
+          gradle assembleDebug --console=plain
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: "**/app/build/outputs/apk/debug/app-debug.apk"
           
