@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -23,6 +23,7 @@ jobs:
         run: |
           mkdir -p extracted_proj
           unzip -q callai-nov-23-2026-9-50-49-pm.zip -d extracted_proj
+          ls -la extracted_proj
 
       - name: Generate debug keystore if missing
         run: |
@@ -42,13 +43,20 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          cd extracted_proj
+          GRADLEW_PATH=$(find extracted_proj -name "gradlew" -type f | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "gradlew not found!"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+          echo "Building project in: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: extracted_proj/app/build/outputs/apk/debug/app-debug.apk
+          path: "**/app/build/outputs/apk/debug/app-debug.apk"
           
